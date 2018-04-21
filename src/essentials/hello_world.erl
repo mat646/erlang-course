@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 05. mar 2018 12:50
 %%%-------------------------------------------------------------------
--module(test_erlang).
+-module(hello_world).
 -author("Mateusz Sokol").
 
 %% API
