@@ -12,7 +12,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
--export([main/0]).
+-export([main/0, createMonitor/0, addStation/3, addValue/5, removeValue/4,
+  getOneValue/4, getStationMean/3, getDailyMean/3, getMinimumPollutionStation/3]).
 
 -record(monitor, {stationMap}).
 -record(station, {name, coords, measureList}).
@@ -21,11 +22,13 @@
 main() ->
   M = createMonitor(),
   M1 = addStation(M, "Stat1", {10, 12}),
-  M2 = addValue(M1, "Stat1", 1, 1, 10),
-  M3 = addValue(M2, "Stat1", 2, 1, 12),
-  M4 = addValue(M3, "Stat1", 3, 1, 9),
-  M5 = removeValue(M4, "Stat1", 3, 1),
-  io:write(getMinimumPollutionStation(M5, 1, 1)). %% maps:get("Stat1", M5#monitor.stationMap)
+  M2 = addValue(M1, "Stat1", {2018,4,23}, 1, 10),
+  M3 = addValue(M2, "Stat1", {2018,4,24}, 1, 12),
+  M4 = addValue(M3, "Stat1", {2018,4,25}, 1, 9),
+  M5 = removeValue(M4, "Stat1", {2018,4,25}, 1),
+  M6 = addStation(M5, "Stat2", {20.0, 25.0}),
+  M7 = addValue(M6, "Stat2", {2018,4,23}, 1, 15),
+  io:write(getMinimumPollutionStation(M7, 1, {2018,4,23})).
 
 createMonitor() -> #monitor{stationMap = #{}}.
 
@@ -37,7 +40,7 @@ addStation(#monitor{stationMap = SM}, Name, Coords) ->
 addValue(#monitor{stationMap = SM}, StationName, Date, Type, Value) ->
   M = #measurement{type = Type, date = Date, val = Value},
   #station{name = N, coords = C, measureList = ML} = maps:get(StationName, SM),
-  Bool = lists:member({Type, Value, Date}, ML),
+  Bool = lists:member(M, ML),
   if Bool ->
     #monitor{stationMap = SM};
     true ->
@@ -111,37 +114,43 @@ findMinInStation([#measurement{type = Type, val = V, date = Date} | T], Type, Da
   findMinInStation(T, Type, Date, V);
 findMinInStation([_ | T], Type, Date, Min) -> findMinInStation(T, Type, Date, Min).
 
-
-%% ----------- Tests ----------
+%% ----------- TESTS -----------
 
 createMonitor_test() -> #monitor{stationMap = #{}} = createMonitor().
 
-getOneVauleTest_test() ->
+getOneValueTest_test() ->
   M = createMonitor(),
   M1 = addStation(M, "Stat1", {10, 12}),
-  M2 = addValue(M1, "Stat1", 1, 1, 10),
-  M3 = addValue(M2, "Stat1", 2, 1, 12),
-  M4 = addValue(M3, "Stat1", 3, 1, 9),
-  M5 = removeValue(M4, "Stat1", 3, 1),
-  getOneValue(M5, 1, "Stat1", 1) == 10.
+  M2 = addValue(M1, "Stat1", {2018,4,23}, 1, 10),
+  M3 = addValue(M2, "Stat1", {2018,4,24}, 1, 12),
+  M4 = addValue(M3, "Stat1", {2018,4,25}, 1, 9),
+  M5 = removeValue(M4, "Stat1", {2018,4,24}, 1),
+  ?assert(getOneValue(M5, 1, "Stat1", {2018,4,23}) =:= 10).
 
 getStationMean_test() ->
   M = createMonitor(),
   M1 = addStation(M, "Stat1", {10, 12}),
-  M2 = addValue(M1, "Stat1", 1, 1, 10),
-  M3 = addValue(M2, "Stat1", 2, 1, 12),
-  M4 = addValue(M3, "Stat1", 3, 1, 9),
-  M5 = removeValue(M4, "Stat1", 3, 1),
-  getStationMean(M5, 1, "Stat1") == 11.0.
+  M2 = addValue(M1, "Stat1", {2018,4,23}, 1, 10),
+  M3 = addValue(M2, "Stat1", {2018,4,24}, 1, 12),
+  M4 = addValue(M3, "Stat1", {2018,4,25}, 1, 9),
+  M5 = removeValue(M4, "Stat1", {2018,4,25}, 1),
+  ?assert(getStationMean(M5, 1, "Stat1") =:= 11.0).
 
 getDailyMean_test() -> M = createMonitor(),
   M1 = addStation(M, "Stat1", {10, 12}),
-  M2 = addValue(M1, "Stat1", 1, 1, 10),
-  M3 = addValue(M2, "Stat1", 2, 1, 12),
-  M4 = addValue(M3, "Stat1", 3, 1, 9),
-  M5 = removeValue(M4, "Stat1", 3, 1),
-  getDailyMean(M5, 1, 1) == 10.0.
+  M2 = addValue(M1, "Stat1", {2018,4,23}, 1, 10),
+  M3 = addValue(M2, "Stat1", {2018,4,24}, 1, 12),
+  M4 = addValue(M3, "Stat1", {2018,4,25}, 1, 9),
+  M5 = removeValue(M4, "Stat1", {2018,4,24}, 1),
+  ?assert(getDailyMean(M5, 1, {2018,4,23}) =:= 10.0).
 
-getMinimumPollutionStation_test() -> 1 == 1.
-
-length_test() -> ?assert(length([1,2,3]) =:= 3).
+getMinimumPollutionStation_test() ->
+  M = createMonitor(),
+  M1 = addStation(M, "Stat1", {10, 12}),
+  M2 = addValue(M1, "Stat1", {2018,4,23}, 1, 10),
+  M3 = addValue(M2, "Stat1", {2018,4,24}, 1, 12),
+  M4 = addValue(M3, "Stat1", {2018,4,25}, 1, 9),
+  M5 = removeValue(M4, "Stat1", {2018,4,25}, 1),
+  M6 = addStation(M5, "Stat2", {20.0, 25.0}),
+  M7 = addValue(M6, "Stat2", {2018,4,23}, 1, 5),
+  ?assert(getMinimumPollutionStation(M7, 1, {2018,4,23}) =:= {5,[83,116,97,116,50]}).
