@@ -25,7 +25,7 @@ main() ->
   M3 = addValue(M2, "Stat1", 2, 1, 12),
   M4 = addValue(M3, "Stat1", 3, 1, 9),
   M5 = removeValue(M4, "Stat1", 3, 1),
-  io:write(getStationMean(M5, 1, "Stat1")). %% maps:get("Stat1", M5#monitor.stationMap)
+  io:write(getMinimumPollutionStation(M5, 1, 1)). %% maps:get("Stat1", M5#monitor.stationMap)
 
 createMonitor() -> #monitor{stationMap = #{}}.
 
@@ -37,8 +37,12 @@ addStation(#monitor{stationMap = SM}, Name, Coords) ->
 addValue(#monitor{stationMap = SM}, StationName, Date, Type, Value) ->
   M = #measurement{type = Type, date = Date, val = Value},
   #station{name = N, coords = C, measureList = ML} = maps:get(StationName, SM),
-  S = #station{name = N, coords = C, measureList = [M | ML]},
-  #monitor{stationMap = SM#{StationName => S}}.
+  Bool = lists:member({Type, Value, Date}, ML),
+  if Bool ->
+    #monitor{stationMap = SM};
+    true ->
+      S = #station{name = N, coords = C, measureList = [M | ML]},
+  #monitor{stationMap = SM#{StationName => S}} end.
 
 %% usuwa odczyt ze stacji (współrzędne geograficzne lub nazwa stacji, data, typ pomiaru), zwraca zaktualizowany monitor;
 removeValue(#monitor{stationMap = SM}, StationName, Date, Type) ->
@@ -64,13 +68,13 @@ getStationMean(#monitor{stationMap = SM}, Type, StationName) ->
 
 %% zwraca średnią wartość parametru danego typu, danego dnia na wszystkich stacjach;
 getDailyMean(#monitor{stationMap = SM}, Type, Date) ->
-  SL = maps:to_list(SM),
+  SL = maps:values(SM),
   {L, Len} = getValsAndLength(SL, Type, Date),
   L / Len.
 
 getValsAndLength([], _Type, _Date) ->
   {0, 0};
-getValsAndLength([{K, {Name, Coords, MeasureList}} | T], Type, Date) ->
+getValsAndLength([#station{name = Name, coords = Coords, measureList = MeasureList} | T], Type, Date) ->
   {Sum, Len} = computeMeasureList(MeasureList, Type, Date),
   {Sum1, Len1} = getValsAndLength(T, Type, Date),
   {Sum + Sum1, Len + Len1}.
@@ -79,18 +83,17 @@ computeMeasureList(ML, Type, Date) ->
   R = findVals(ML, Type, Date),
   {lists:sum(R), length(R)}.
 
-findVals(#station{measureList = []}, _Type, _Date) ->
+findVals([], _Type, _Date) ->
   [];
-findVals(#station{measureList = [#measurement{type = Type,
-  val = V, date = Date} | T]}, Type, Date) ->
-  [V | findVals(#station{measureList = T}, Type, Date)];
-findVals(#station{measureList = [#measurement{type = _Type,
-  val = _V, date = _Date} | T]}, Type, Date) ->
-  [findVals(#station{measureList = T}, Type, Date)].
+findVals([#measurement{type = Type, val = V, date = Date} | T], Type, Date) ->
+  [V | findVals(T, Type, Date)];
+findVals([#measurement{type = _,
+  val = _V, date = _Date} | T], Type, Date) ->
+  findVals(T, Type, Date).
 
 %%  wyszuka stacje z najniższym zanieczyszczeniem danego typu
 getMinimumPollutionStation(#monitor{stationMap = SM}, Type, Date) ->
-  SL = maps:to_list(SM),
+  SL = maps:values(SM),
   findMinInAll(SL, Type, Date, {100000, ""}).
 
 findMinInAll([], _, _, {Min, Stat}) ->
@@ -121,5 +124,24 @@ getOneVauleTest_test() ->
   M4 = addValue(M3, "Stat1", 3, 1, 9),
   M5 = removeValue(M4, "Stat1", 3, 1),
   getOneValue(M5, 1, "Stat1", 1) == 10.
+
+getStationMean_test() ->
+  M = createMonitor(),
+  M1 = addStation(M, "Stat1", {10, 12}),
+  M2 = addValue(M1, "Stat1", 1, 1, 10),
+  M3 = addValue(M2, "Stat1", 2, 1, 12),
+  M4 = addValue(M3, "Stat1", 3, 1, 9),
+  M5 = removeValue(M4, "Stat1", 3, 1),
+  getStationMean(M5, 1, "Stat1") == 11.0.
+
+getDailyMean_test() -> M = createMonitor(),
+  M1 = addStation(M, "Stat1", {10, 12}),
+  M2 = addValue(M1, "Stat1", 1, 1, 10),
+  M3 = addValue(M2, "Stat1", 2, 1, 12),
+  M4 = addValue(M3, "Stat1", 3, 1, 9),
+  M5 = removeValue(M4, "Stat1", 3, 1),
+  getDailyMean(M5, 1, 1) == 10.0.
+
+getMinimumPollutionStation_test() -> 1 == 1.
 
 length_test() -> ?assert(length([1,2,3]) =:= 3).
