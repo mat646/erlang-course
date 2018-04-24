@@ -73,7 +73,11 @@ getStationMean(#monitor{stationMap = SM}, Type, StationName) ->
 getDailyMean(#monitor{stationMap = SM}, Type, Date) ->
   SL = maps:values(SM),
   {L, Len} = getValsAndLength(SL, Type, Date),
-  L / Len.
+  if Len == 0 ->
+    0;
+    true ->
+      L / Len
+  end.
 
 getValsAndLength([], _Type, _Date) ->
   {0, 0};
@@ -118,7 +122,7 @@ findMinInStation([_ | T], Type, Date, Min) -> findMinInStation(T, Type, Date, Mi
 
 createMonitor_test() -> #monitor{stationMap = #{}} = createMonitor().
 
-getOneValueTest_test() ->
+getOneValue_test() ->
   M = createMonitor(),
   M1 = addStation(M, "Stat1", {10, 12}),
   M2 = addValue(M1, "Stat1", {2018,4,23}, 1, 10),
@@ -142,7 +146,9 @@ getDailyMean_test() -> M = createMonitor(),
   M3 = addValue(M2, "Stat1", {2018,4,24}, 1, 12),
   M4 = addValue(M3, "Stat1", {2018,4,25}, 1, 9),
   M5 = removeValue(M4, "Stat1", {2018,4,24}, 1),
-  ?assert(getDailyMean(M5, 1, {2018,4,23}) =:= 10.0).
+  M6 = addStation(M5, "Stat2", {20.0, 25.0}),
+  M7 = addValue(M6, "Stat2", {2018,4,23}, 1, 6),
+  ?assert(getDailyMean(M7, 1, {2018,4,23}) =:= 8.0).
 
 getMinimumPollutionStation_test() ->
   M = createMonitor(),
