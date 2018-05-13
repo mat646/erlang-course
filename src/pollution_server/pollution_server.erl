@@ -14,7 +14,7 @@
 %% API
 -export([main/0, addStation/3, addValue/5, removeValue/4,
   getOneValue/4, getStationMean/3, getDailyMean/3, getMinimumPollutionStation/3,
-  start/0, stop/0, loop/1, init/0]).
+  start/0, stop/1, loop/1, init/0]).
 
 -record(monitor, {stationMap}).
 -record(station, {name, coords, measureList}).
@@ -30,20 +30,20 @@ loop(Monitor) ->
       loop(addValue(Monitor, StationName, Date, Type, Value));
     {removeValue, StationName, Date, Type} ->
       loop(removeValue(Monitor, StationName, Date, Type));
-    {getOneValue, Type, StationName, Date} ->
-      io:write(getOneValue(Monitor, Type, StationName, Date)),
+    {getOneValue, Type, StationName, Date, Pid} ->
+      Pid ! (getOneValue(Monitor, Type, StationName, Date)),
       loop(Monitor);
-    {getStationMean, Type, StationName} ->
-      io:write(getStationMean(Monitor, Type, StationName)),
+    {getStationMean, Type, StationName, Pid} ->
+      Pid ! (getStationMean(Monitor, Type, StationName)),
       loop(Monitor);
-    {getDailyMean, Type, Date} ->
-      io:write(getDailyMean(Monitor, Type, Date)),
+    {getDailyMean, Type, Date, Pid} ->
+      Pid ! (getDailyMean(Monitor, Type, Date)),
       loop(Monitor);
-    {getMinimumPollutionStation, Type, Date} ->
-      io:write(getMinimumPollutionStation(Monitor, Type, Date)),
+    {getMinimumPollutionStation, Type, Date, Pid} ->
+      Pid ! (getMinimumPollutionStation(Monitor, Type, Date)),
       loop(Monitor);
-    {show} ->
-      io:write(Monitor),
+    {show, Pid} ->
+      Pid ! Monitor,
       loop(Monitor)
   after
     20000 -> ok
@@ -53,23 +53,25 @@ init() ->
   loop(createMonitor()).
 
 start() ->
-  Pid = spawn(?MODULE, init, []),
-  register(monitor, Pid).
+  spawn(?MODULE, init, []).
 
-stop() ->
-  monitor ! "stop".
+stop(Pid) ->
+  Pid ! "stop".
 
 main() ->
-  start(),
-  monitor ! {addStation, "Stat1", {10, 12}},
-  monitor ! {addValue, "Stat1", {2018,4,23}, 1, 10},
-  monitor ! {addValue, "Stat1", {2018,4,24}, 1, 12},
-  monitor ! {addValue, "Stat1", {2018,4,25}, 1, 9},
-  monitor ! {removeValue, "Stat1", {2018,4,25}, 1},
-  monitor ! {addStation, "Stat2", {20.0, 25.0}},
-  monitor ! {addValue, "Stat2", {2018,4,23}, 1, 15},
-  monitor ! {getMinimumPollutionStation, 1, {2018,4,23}},
-  stop().
+  Pid = start(),
+  Pid ! {addStation, "Stat1", {10, 12}},
+  Pid ! {addValue, "Stat1", {2018, 4, 23}, 1, 10},
+  Pid ! {addValue, "Stat1", {2018, 4, 24}, 1, 12},
+  Pid ! {addValue, "Stat1", {2018, 4, 25}, 1, 9},
+  Pid ! {removeValue, "Stat1", {2018, 4, 25}, 1},
+  Pid ! {addStation, "Stat2", {20.0, 25.0}},
+  Pid ! {addValue, "Stat2", {2018, 4, 23}, 1, 15},
+  Pid ! {getMinimumPollutionStation, 1, {2018, 4, 23}, self()},
+  receive
+    Reply -> io:write(Reply)
+  end,
+  stop(Pid).
 
 
 createMonitor() -> #monitor{stationMap = #{}}.
@@ -162,43 +164,61 @@ findMinInStation([_ | T], Type, Date, Min) -> findMinInStation(T, Type, Date, Mi
 
 %% ----------- TESTS -----------
 
-createMonitor_test() -> #monitor{stationMap = #{}} = createMonitor().
+createMonitor_test() ->
+  Pid = start(),
+  Pid ! {show, self()},
+  receive
+    Reply -> ?assert(Reply =:= #monitor{stationMap = #{}})
+  end.
 
 getOneValue_test() ->
-  M = createMonitor(),
-  M1 = addStation(M, "Stat1", {10, 12}),
-  M2 = addValue(M1, "Stat1", {2018,4,23}, 1, 10),
-  M3 = addValue(M2, "Stat1", {2018,4,24}, 1, 12),
-  M4 = addValue(M3, "Stat1", {2018,4,25}, 1, 9),
-  M5 = removeValue(M4, "Stat1", {2018,4,24}, 1),
-  ?assert(getOneValue(M5, 1, "Stat1", {2018,4,23}) =:= 10).
+  Pid = start(),
+  Pid ! {addStation, "Stat1", {10, 12}},
+  Pid ! {addValue, "Stat1", {2018, 4, 23}, 1, 10},
+  Pid ! {addValue, "Stat1", {2018, 4, 24}, 1, 12},
+  Pid ! {addValue, "Stat1", {2018, 4, 25}, 1, 9},
+  Pid ! {removeValue, "Stat1", {2018, 4, 24}, 1},
+  Pid ! {getOneValue, 1, "Stat1", {2018, 4, 23}, self()},
+  receive
+    Reply -> ?assert(Reply =:= 10)
+  end.
 
 getStationMean_test() ->
-  M = createMonitor(),
-  M1 = addStation(M, "Stat1", {10, 12}),
-  M2 = addValue(M1, "Stat1", {2018,4,23}, 1, 10),
-  M3 = addValue(M2, "Stat1", {2018,4,24}, 1, 12),
-  M4 = addValue(M3, "Stat1", {2018,4,25}, 1, 9),
-  M5 = removeValue(M4, "Stat1", {2018,4,25}, 1),
-  ?assert(getStationMean(M5, 1, "Stat1") =:= 11.0).
+  Pid = start(),
+  Pid ! {addStation, "Stat1", {10, 12}},
+  Pid ! {addValue, "Stat1", {2018, 4, 23}, 1, 10},
+  Pid ! {addValue, "Stat1", {2018, 4, 24}, 1, 12},
+  Pid ! {addValue, "Stat1", {2018, 4, 25}, 1, 9},
+  Pid ! {removeValue, "Stat1", {2018, 4, 25}, 1},
+  Pid ! {getStationMean, 1, "Stat1", self()},
+  receive
+    Reply -> ?assert(Reply =:= 11.0)
+  end.
 
-getDailyMean_test() -> M = createMonitor(),
-  M1 = addStation(M, "Stat1", {10, 12}),
-  M2 = addValue(M1, "Stat1", {2018,4,23}, 1, 10),
-  M3 = addValue(M2, "Stat1", {2018,4,24}, 1, 12),
-  M4 = addValue(M3, "Stat1", {2018,4,25}, 1, 9),
-  M5 = removeValue(M4, "Stat1", {2018,4,24}, 1),
-  M6 = addStation(M5, "Stat2", {20.0, 25.0}),
-  M7 = addValue(M6, "Stat2", {2018,4,23}, 1, 6),
-  ?assert(getDailyMean(M7, 1, {2018,4,23}) =:= 8.0).
+getDailyMean_test() ->
+  Pid = start(),
+  Pid ! {addStation, "Stat1", {10, 12}},
+  Pid ! {addValue, "Stat1", {2018, 4, 23}, 1, 10},
+  Pid ! {addValue, "Stat1", {2018, 4, 24}, 1, 12},
+  Pid ! {addValue, "Stat1", {2018, 4, 25}, 1, 9},
+  Pid ! {removeValue, "Stat1", {2018, 4, 24}, 1},
+  Pid ! {addStation, "Stat2", {20.0, 25.0}},
+  Pid ! {addValue, "Stat2", {2018, 4, 23}, 1, 6},
+  Pid ! {getDailyMean, 1, {2018, 4, 23}, self()},
+  receive
+    Reply -> ?assert(Reply =:= 8.0)
+  end.
 
 getMinimumPollutionStation_test() ->
-  M = createMonitor(),
-  M1 = addStation(M, "Stat1", {10, 12}),
-  M2 = addValue(M1, "Stat1", {2018,4,23}, 1, 10),
-  M3 = addValue(M2, "Stat1", {2018,4,24}, 1, 12),
-  M4 = addValue(M3, "Stat1", {2018,4,25}, 1, 9),
-  M5 = removeValue(M4, "Stat1", {2018,4,25}, 1),
-  M6 = addStation(M5, "Stat2", {20.0, 25.0}),
-  M7 = addValue(M6, "Stat2", {2018,4,23}, 1, 5),
-  ?assert(getMinimumPollutionStation(M7, 1, {2018,4,23}) =:= {5,[83,116,97,116,50]}).
+  Pid = start(),
+  Pid ! {addStation, "Stat1", {10, 12}},
+  Pid ! {addValue, "Stat1", {2018, 4, 23}, 1, 10},
+  Pid ! {addValue, "Stat1", {2018, 4, 24}, 1, 12},
+  Pid ! {addValue, "Stat1", {2018, 4, 25}, 1, 9},
+  Pid ! {removeValue, "Stat1", {2018, 4, 25}, 1},
+  Pid ! {addStation, "Stat2", {20.0, 25.0}},
+  Pid ! {addValue, "Stat2", {2018, 4, 23}, 1, 15},
+  Pid ! {getMinimumPollutionStation, 1, {2018, 4, 23}, self()},
+  receive
+    Reply -> ?assert(Reply =:= {10, [83, 116, 97, 116, 49]})
+  end.

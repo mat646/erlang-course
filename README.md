@@ -4,7 +4,7 @@ Completed assignments for Erlang Course
 
 ## Content
 
-### Essntials
+### Essentials
 
 Implementation of basic operations and quicksort algorithm.
 
