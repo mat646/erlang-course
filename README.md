@@ -28,3 +28,13 @@ The basic usage of processes in Erlang.
 
 Extended Pollution module.
 
+### Pollution Gen Server
+
+#### Usage
+
+After building all .beam files:
+
+```sh
+$ erl -pa out/production/ErlangLab  
+> pollution_gen_server:start_link().
+```
